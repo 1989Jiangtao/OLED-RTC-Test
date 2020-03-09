@@ -28,7 +28,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "oled.h"
+#include "stdio.h"
+#include "stdbool.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,18 +50,54 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+RTC_DateTypeDef sDate ;
+RTC_TimeTypeDef sTime ;
+bool flag = true;
+uint8_t second_count = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+void Display_Time(void); // 获取定时时间
+void Colon_Toggle(void); // 时间分隔符翻�?
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+// 显示时间
+void Display_Time(void)
+{
+	unsigned char str[10];
+	HAL_RTC_GetTime(&hrtc,&sTime,RTC_FORMAT_BIN);
+	HAL_RTC_GetDate(&hrtc,&sDate,RTC_FORMAT_BIN);
+	OLED_ShowBigNum(22,2,sTime.Hours/10,BIG_NUM);
+	OLED_ShowBigNum(40,2,sTime.Hours%10,BIG_NUM);
+	OLED_ShowBigNum(72,2,sTime.Minutes/10,BIG_NUM);
+	OLED_ShowBigNum(90,2,sTime.Minutes%10,BIG_NUM);
+	printf("%d%d:%d%d:%d%d\t",sTime.Hours/10,sTime.Hours%10,sTime.Minutes/10,sTime.Minutes%10,sTime.Seconds/10,sTime.Seconds%10);
+	
+	str[0]='2';
+	str[1]='0';
+	str[2]=sDate.Year/10+'0';
+	str[3]=sDate.Year%10+'0';
+	str[4]='-';
+	str[5]=sDate.Month/10+'0';
+	str[6]=sDate.Month%10+'0';
+	str[7]='-';
+	str[8]=sDate.Date/10+'0';
+	str[9]=sDate.Date%10+'0';
+	OLED_ShowString(0,6,str,MEDIAN_SIZE);
+	OLED_ShowCHineseWeek(106,6,sDate.WeekDay%7);
+	printf("%s\r\n",str);
+	
+}
 
+// 时间分隔符冒号闪�?
+void Colon_Toggle(void)
+{
+	OLED_ShowBigNum(56,2,flag,BIG_COLON);
+}
 /* USER CODE END 0 */
 
 /**
@@ -85,7 +123,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+	
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -95,6 +133,14 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
+	HAL_TIM_Base_Start_IT(&htim4); // �?启定时器4
+	OLED_Init(); // OLED初始�?
+	OLED_Clear();
+	OLED_ShowCHinese(0,0,12); // 信号�?
+	OLED_ShowCHinese(92,0,13); // 蓝牙
+	OLED_ShowCHinese(110,0,11); // 电池
+	OLED_ShowCHineseWeek(90,6,7); // �?
+	OLED_ShowBigNum(56,2,0,BIG_COLON); // 时间冒号分割�?
 
   /* USER CODE END 2 */
 
@@ -155,7 +201,29 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+/**
+ * Print log to UART
+ */
+int fputc(int ch , FILE *f)
+{
+	HAL_UART_Transmit(&huart1, (uint8_t *)&ch , 1 , 0xFFFF);
+	return ch;
+}
 
+// 定时器中断，每隔500ms进入�?�?
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if(TIM4 == htim->Instance){
+		HAL_GPIO_TogglePin(LED_0_GPIO_Port,LED_0_Pin);
+		flag = !flag ;
+		Colon_Toggle();
+		second_count ++;
+		if(second_count==2){ // 1s显示�?次时�?
+			second_count = 0;
+			Display_Time();
+		}
+	}
+}
 /* USER CODE END 4 */
 
 /**
